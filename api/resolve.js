@@ -41,6 +41,8 @@ export default async function handler(req, res) {
     // Try the normal client first. TV_EMBEDDED is currently rejected for some videos.
     let info;
     let selectedClient = 'WEB';
+    let fallbackStatus = null;
+    let fallbackReason = null;
     try {
       info = await yt.getInfo(videoId);
     } catch (error) {
@@ -52,6 +54,9 @@ export default async function handler(req, res) {
       try {
         const androidInfo = await yt.getInfo(videoId, { client: 'ANDROID' });
         const androidStatus = androidInfo?.playability_status?.status;
+        fallbackStatus = androidStatus || null;
+        fallbackReason = androidInfo?.playability_status?.reason || null;
+        console.info('[resolve] ANDROID result', { status: fallbackStatus, hasStreamingData: Boolean(androidInfo?.streaming_data), reason: fallbackReason });
         if (androidInfo?.streaming_data && androidStatus !== 'LOGIN_REQUIRED' && androidStatus !== 'ERROR') {
           info = androidInfo;
           selectedClient = 'ANDROID';
@@ -66,6 +71,10 @@ export default async function handler(req, res) {
 
     if (!info) {
       throw new Error('تعذر جلب بيانات الفيديو من YouTube. حاول مجددًا لاحقًا.');
+    }
+    if (!info.streaming_data && info.playability_status?.status === 'LOGIN_REQUIRED') {
+      console.warn('[resolve] YouTube requires sign-in; no stream data returned', { videoId, selectedClient, fallbackStatus, fallbackReason });
+      throw new Error('YouTube يطلب تسجيل الدخول للتحقق من أنك لست روبوتًا، لذلك لم يُرجع الخادم صيغ الفيديو. هذه ليست مشكلة في صيغة progressive. جرّب لاحقًا؛ وقد يلزم استخدام مصدر تشغيل موثوق بدل اتصال الخادم الحالي.');
     }
     if (!info.streaming_data && info.playability_status?.status === 'ERROR') {
       throw new Error('رفض YouTube تشغيل الفيديو عبر طريقة الاتصال الحالية. جرّب فيديو عامًا آخر أو أعد المحاولة لاحقًا.');
