@@ -103,7 +103,8 @@ export default async function handler(req, res) {
       .sort((a, b) => (parseInt(b.qualityLabel, 10) || 0) - (parseInt(a.qualityLabel, 10) || 0));
 
     const diagnostics = {
-      selectedClient,\n      receivedFormats: rawFormats.length,
+      selectedClient,
+      receivedFormats: rawFormats.length,
       receivedAdaptiveFormats: adaptiveFormats.length,
       progressiveMp4Candidates: candidates.length,
       formatsWithUsableUrl: formats.length,
