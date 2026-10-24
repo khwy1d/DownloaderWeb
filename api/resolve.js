@@ -38,7 +38,8 @@ export default async function handler(req, res) {
     const videoId = extractVideoId(body.url);
     console.info('[resolve] start', { videoId });
     const yt = await Innertube.create({ lang: 'ar', location: 'US', enable_session_cache: true, retrieve_player: true });
-    const info = await yt.getInfo(videoId);
+    // TV_EMBEDDED has been reported to avoid YouTube's bot-check response on server-side clients.
+    const info = await yt.getInfo(videoId, { client: 'TV_EMBEDDED' });
     const details = info.basic_info || {};
     const rawFormats = info.streaming_data?.formats || [];
     const adaptiveFormats = info.streaming_data?.adaptive_formats || [];
