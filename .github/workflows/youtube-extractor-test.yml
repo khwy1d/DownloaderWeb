@@ -1,0 +1,80 @@
+name: YouTube extractor comparison (metadata only)
+
+on:
+  push:
+    branches:
+      - experiment/yt-dlp-format-check
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect-video:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Set up Deno for YouTube JavaScript challenges
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Install current yt-dlp
+        run: python -m pip install --upgrade "yt-dlp[default]"
+      - name: Inspect formats without downloading media
+        id: inspect
+        env:
+          VIDEO_URL: "https://youtu.be/b7Ocst3_08Q"
+        shell: bash
+        run: |
+          set +e
+          yt-dlp --verbose --no-playlist --dump-single-json --skip-download "$VIDEO_URL" > result.json 2> diagnostic.log
+          status=$?
+          echo "yt_dlp_exit_code=$status" >> "$GITHUB_OUTPUT"
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          p = Path("result.json")
+          summary = []
+          if p.exists():
+              try:
+                  data = json.loads(p.read_text())
+                  summary += [
+                      f"Video ID: {data.get('id', 'unknown')}",
+                      f"Extractor: {data.get('extractor_key', 'unknown')}",
+                      f"Title available: {'yes' if data.get('title') else 'no'}",
+                      f"Formats returned: {len(data.get('formats') or [])}",
+                  ]
+                  formats = data.get('formats') or []
+                  summary += [f"Formats with audio+video: {sum(1 for f in formats if f.get('vcodec') not in (None, 'none') and f.get('acodec') not in (None, 'none'))}"]
+                  summary += [f"Formats with video only: {sum(1 for f in formats if f.get('vcodec') not in (None, 'none') and f.get('acodec') == 'none')}"]
+                  summary += [f"Formats with audio only: {sum(1 for f in formats if f.get('acodec') not in (None, 'none') and f.get('vcodec') == 'none')}"]
+              except Exception:
+                  summary.append("Metadata JSON could not be parsed; inspect diagnostic log.")
+          else:
+              summary.append("No metadata JSON produced.")
+          log = Path("diagnostic.log").read_text(errors="replace") if Path("diagnostic.log").exists() else ""
+          relevant = [line for line in log.splitlines() if any(k in line.lower() for k in ("error", "warning", "token", "challenge", "login", "sign in", "bot", "403", "429"))]
+          summary += ["", "Relevant diagnostic lines (secrets should not be added to this workflow):"]
+          summary += relevant[-25:] or ["No matching diagnostic lines captured."]
+          summary += ["", f"Process exit code: {os.environ.get('YT_DLP_EXIT_CODE', 'see step output')}"]
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as f:
+              f.write("\n".join(summary) + "\n")
+          PY
+          echo "yt-dlp exit code: $status"
+          tail -n 100 diagnostic.log || true
+          # This is a diagnostic run; preserve logs and inspect result even on extractor failure.
+          exit 0
+      - name: Upload diagnostic output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: yt-dlp-metadata-diagnostic
+          path: |
+            diagnostic.log
+            result.json
+          if-no-files-found: ignore
+          retention-days: 3
