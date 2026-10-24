@@ -1,4 +1,8 @@
-import { Innertube } from 'youtubei.js';
+import { Innertube, Platform } from 'youtubei.js/web';
+
+// youtubei.js requires an evaluator to run YouTube's player decipher script.
+// This follows the library's documented Node.js setup.
+Platform.shim.eval = async (data) => new Function(data.output)();
 
 const MAX_BODY_LENGTH = 4096;
 
@@ -33,10 +37,11 @@ export default async function handler(req, res) {
 
     const videoId = extractVideoId(body.url);
     console.info('[resolve] start', { videoId });
-    const yt = await Innertube.create({ lang: 'ar', location: 'US', enable_session_cache: true });
+    const yt = await Innertube.create({ lang: 'ar', location: 'US', enable_session_cache: true, retrieve_player: true });
     const info = await yt.getInfo(videoId);
     const details = info.basic_info || {};
     const rawFormats = info.streaming_data?.formats || [];
+    const adaptiveFormats = info.streaming_data?.adaptive_formats || [];
 
     // Format.decipher() is asynchronous in youtubei.js; await it before validating the URL.
     const candidates = rawFormats.filter((format) =>
@@ -68,6 +73,7 @@ export default async function handler(req, res) {
 
     const diagnostics = {
       receivedFormats: rawFormats.length,
+      receivedAdaptiveFormats: adaptiveFormats.length,
       progressiveMp4Candidates: candidates.length,
       formatsWithUsableUrl: formats.length,
       playabilityStatus: info.playability_status?.status || null,
