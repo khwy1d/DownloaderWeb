@@ -38,8 +38,38 @@ export default async function handler(req, res) {
     const videoId = extractVideoId(body.url);
     console.info('[resolve] start', { videoId });
     const yt = await Innertube.create({ lang: 'ar', location: 'US', enable_session_cache: true, retrieve_player: true });
-    // TV_EMBEDDED has been reported to avoid YouTube's bot-check response on server-side clients.
-    const info = await yt.getInfo(videoId, { client: 'TV_EMBEDDED' });
+    // Try the normal client first. TV_EMBEDDED is currently rejected for some videos.
+    let info;
+    let selectedClient = 'WEB';
+    try {
+      info = await yt.getInfo(videoId);
+    } catch (error) {
+      console.warn('[resolve] WEB client failed', error?.message);
+    }
+
+    const webStatus = info?.playability_status?.status;
+    if (!info?.streaming_data || webStatus === 'LOGIN_REQUIRED' || webStatus === 'ERROR') {
+      try {
+        const androidInfo = await yt.getInfo(videoId, { client: 'ANDROID' });
+        const androidStatus = androidInfo?.playability_status?.status;
+        if (androidInfo?.streaming_data && androidStatus !== 'LOGIN_REQUIRED' && androidStatus !== 'ERROR') {
+          info = androidInfo;
+          selectedClient = 'ANDROID';
+        } else if (!info) {
+          info = androidInfo;
+          selectedClient = 'ANDROID';
+        }
+      } catch (error) {
+        console.warn('[resolve] ANDROID client failed', error?.message);
+      }
+    }
+
+    if (!info) {
+      throw new Error('تعذر جلب بيانات الفيديو من YouTube. حاول مجددًا لاحقًا.');
+    }
+    if (!info.streaming_data && info.playability_status?.status === 'ERROR') {
+      throw new Error('رفض YouTube تشغيل الفيديو عبر طريقة الاتصال الحالية. جرّب فيديو عامًا آخر أو أعد المحاولة لاحقًا.');
+    }
     const details = info.basic_info || {};
     const rawFormats = info.streaming_data?.formats || [];
     const adaptiveFormats = info.streaming_data?.adaptive_formats || [];
@@ -73,7 +103,7 @@ export default async function handler(req, res) {
       .sort((a, b) => (parseInt(b.qualityLabel, 10) || 0) - (parseInt(a.qualityLabel, 10) || 0));
 
     const diagnostics = {
-      receivedFormats: rawFormats.length,
+      selectedClient,\n      receivedFormats: rawFormats.length,
       receivedAdaptiveFormats: adaptiveFormats.length,
       progressiveMp4Candidates: candidates.length,
       formatsWithUsableUrl: formats.length,
