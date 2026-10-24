@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#101923">
+  <meta name="description" content="واجهة تجريبية لاختبار استخراج فيديوهات YouTube وتشخيص الأخطاء.">
+  <title>Downloader Lab — تجربة يوتيوب</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="Downloader Lab">
+        <span class="brand-mark">D</span>
+        <span><strong>Downloader Lab</strong><small>مختبر تنزيل الفيديو</small></span>
+      </a>
+      <span class="pill"><i></i> نسخة تجريبية</span>
+    </header>
+
+    <section class="hero">
+      <div class="eyebrow"><span>01</span> استخراج يوتيوب فقط</div>
+      <h1>اختبر الرابط.<br><span>افهم المشكلة.</span></h1>
+      <p>أدخل رابط فيديو عام من YouTube، وسنحاول استخراج بياناته والجودات المتاحة، مع تسجيل كل خطوة لتسهيل تشخيص الأخطاء.</p>
+    </section>
+
+    <section class="panel" aria-labelledby="form-title">
+      <div class="panel-heading">
+        <div><span class="section-kicker">رابط الفيديو</span><h2 id="form-title">ابدأ الاختبار</h2></div>
+        <span class="youtube-icon" aria-hidden="true">▶</span>
+      </div>
+      <form id="resolve-form">
+        <label for="video-url">رابط YouTube</label>
+        <div class="input-row">
+          <input id="video-url" name="url" type="url" placeholder="https://www.youtube.com/watch?v=..." autocomplete="url" required>
+          <button id="resolve-button" type="submit"><span>فحص الرابط</span><b aria-hidden="true">←</b></button>
+        </div>
+        <div class="form-foot"><span>يدعم watch و youtu.be و Shorts و live و embed</span><button class="text-button" id="sample-button" type="button">مثال للاختبار</button></div>
+      </form>
+    </section>
+
+    <section id="result-panel" class="panel result-panel" hidden aria-live="polite">
+      <div class="panel-heading">
+        <div><span class="section-kicker">نتيجة الاستخراج</span><h2 id="video-title">جارٍ الفحص…</h2></div>
+        <span id="result-status" class="status-badge">قيد المعالجة</span>
+      </div>
+      <div id="video-meta" class="video-meta"></div>
+      <div class="quality-header"><h3>الجودات التي تحتوي على الصوت والصورة</h3><span id="format-count">0</span></div>
+      <div id="formats" class="formats"></div>
+      <div id="download-area" class="download-area" hidden>
+        <form id="download-form" method="post" action="/api/download">
+          <input type="hidden" name="url" id="download-url">
+          <input type="hidden" name="title" id="download-title">
+          <input type="hidden" name="mimeType" id="download-mime">
+          <button class="download-button" type="submit">تنزيل الجودة المختارة <span>↓</span></button>
+        </form>
+        <p class="small-note">قد يختلف نجاح التنزيل حسب قيود الفيديو ومدة صلاحية رابط البث وحدود استضافة الخادم.</p>
+      </div>
+    </section>
+
+    <section class="panel log-panel">
+      <div class="panel-heading compact">
+        <div><span class="section-kicker">تشخيص مباشر</span><h2>سجل الخطوات</h2></div>
+        <button id="clear-log" class="text-button" type="button">مسح السجل</button>
+      </div>
+      <ol id="logs" class="logs"><li class="log-empty">ستظهر هنا مراحل الفحص والأخطاء التفصيلية.</li></ol>
+    </section>
+
+    <footer><span>Downloader Lab · MVP 0.1</span><span>للاختبار على فيديوهات متاحة للعامة فقط</span></footer>
+  </main>
+</body>
+</html>
