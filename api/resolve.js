@@ -30,40 +30,57 @@ export default async function handler(req, res) {
     if (raw.length > MAX_BODY_LENGTH) return res.status(413).json({ error: 'حجم الطلب أكبر من المسموح.' });
     const body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {});
     if (typeof body.url !== 'string' || body.url.length > 2048) return res.status(400).json({ error: 'أدخل رابط YouTube صالحًا.' });
+
     const videoId = extractVideoId(body.url);
     console.info('[resolve] start', { videoId });
     const yt = await Innertube.create({ lang: 'ar', location: 'US', enable_session_cache: true });
     const info = await yt.getInfo(videoId);
     const details = info.basic_info || {};
     const rawFormats = info.streaming_data?.formats || [];
-    const formats = rawFormats
-      .filter((format) => format.has_video && format.has_audio && String(format.mime_type || format.mimeType || '').includes('video/mp4'))
-      .map((format) => {
-        let streamUrl = format.url;
-        if (!streamUrl && typeof format.decipher === 'function') {
-          try { streamUrl = format.decipher(yt.session.player); } catch (error) {
-            console.warn('[resolve] format decipher failed', format.itag, error?.message);
-          }
+
+    // Format.decipher() is asynchronous in youtubei.js; await it before validating the URL.
+    const candidates = rawFormats.filter((format) =>
+      format.has_video && format.has_audio &&
+      String(format.mime_type || format.mimeType || '').includes('video/mp4')
+    );
+
+    const formats = (await Promise.all(candidates.map(async (format) => {
+      let streamUrl = format.url;
+      if (!streamUrl && typeof format.decipher === 'function') {
+        try {
+          streamUrl = await format.decipher(yt.session.player);
+        } catch (error) {
+          console.warn('[resolve] format decipher failed', format.itag, error?.message);
         }
-        return {
-          itag: format.itag,
-          qualityLabel: format.quality_label || format.qualityLabel || format.quality,
-          quality: format.quality,
-          mimeType: format.mime_type || format.mimeType || 'video/mp4',
-          contentLength: Number(format.content_length || format.contentLength || 0),
-          fps: format.fps,
-          url: streamUrl
-        };
-      })
-      .filter((format) => typeof format.url === 'string' && format.url.startsWith('https://') && format.qualityLabel)
+      }
+      if (typeof streamUrl !== 'string' || !streamUrl.startsWith('https://')) return null;
+      return {
+        itag: format.itag,
+        qualityLabel: format.quality_label || format.qualityLabel || format.quality || (format.height ? `${format.height}p` : ''),
+        quality: format.quality,
+        mimeType: format.mime_type || format.mimeType || 'video/mp4',
+        contentLength: Number(format.content_length || format.contentLength || 0),
+        fps: format.fps,
+        url: streamUrl
+      };
+    }))).filter((format) => format && format.qualityLabel)
       .sort((a, b) => (parseInt(b.qualityLabel, 10) || 0) - (parseInt(a.qualityLabel, 10) || 0));
-    console.info('[resolve] completed', { videoId, formats: formats.length });
+
+    const diagnostics = {
+      receivedFormats: rawFormats.length,
+      progressiveMp4Candidates: candidates.length,
+      formatsWithUsableUrl: formats.length,
+      playabilityStatus: info.playability_status?.status || null,
+      playabilityReason: info.playability_status?.reason || null
+    };
+    console.info('[resolve] completed', { videoId, ...diagnostics });
     return res.status(200).json({
       videoId,
       title: details.title || info.primary_info?.title?.text || 'فيديو YouTube',
       author: details.author || '',
       duration: Number(details.duration || 0) ? Math.floor(Number(details.duration) / 60) + ':' + String(Number(details.duration) % 60).padStart(2, '0') : '',
-      formats
+      formats,
+      diagnostics
     });
   } catch (error) {
     console.error('[resolve] failed', error);
