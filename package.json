@@ -1,0 +1,10 @@
+{
+  "name": "downloader-youtube-web-demo",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "engines": { "node": ">=20" },
+  "dependencies": {
+    "youtubei.js": "^18.3.0"
+  }
+}
